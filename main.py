@@ -1,50 +1,36 @@
-# from picamera2 import Picamera2 # ไม่ใช้
 import cv2
 import numpy as np
 from ultralytics import YOLO
-from sort import Sort
+from sort import Sort  # ใช้ไฟล์ sort.py ที่คุณมี
 
-# โหลดโมเดล YOLO
-model = YOLO("yolov8n.pt")
-# กำหนด mapping คลาสที่ต้องการติดตาม
-TARGET_CLASSES = {2: "Car", 5: "Bus", 7: "Truck"}
-TARGET_CLASS_IDS = list(TARGET_CLASSES.keys())
+# ==========================
+# โหลดโมเดล YOLO (ตรวจจับรถ)
+# ==========================
+model = YOLO("yolov8n.pt")  # รุ่นเล็กสุด (เร็ว)
 
+# ==========================
+# เปิดวิดีโอ
+# ==========================
+cap = cv2.VideoCapture("istockphoto-1194498762-640_adpp_is.mp4")
 
-# เปิดกล้องโน้ตบุ๊ก (Built-in Webcam)
-# **เพิ่ม cv2.CAP_DSHOW สำหรับ Windows เพื่อความเสถียร**
-cap = cv2.VideoCapture(0, cv2.CAP_DSHOW) 
-
-
-# ตรวจสอบว่าเปิดกล้องสำเร็จหรือไม่
 if not cap.isOpened():
-    # ลองเปิดโดยไม่มี Back-end
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        print("Error: Could not open Notebook Camera (ID 0). Program exiting.")
-        exit()
-    print("Warning: Opened camera without CAP_DSHOW. Stability may vary.")
+    print("❌ ไม่สามารถเปิดวิดีโอได้")
+    exit()
 
-
-# ตั้งค่าความละเอียดเฟรม
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-
-# สร้างตัวติดตาม
+# ==========================
+# สร้างตัวติดตาม (SORT Tracker)
+# ==========================
 tracker = Sort(max_age=10, min_hits=3, iou_threshold=0.3)
 
-print("Starting video processing. Press 'q' to stop.")
-
+# ==========================
+# ลูปหลัก
+# ==========================
 while True:
-    ret, frame = cap.read()  # ดึงภาพจากกล้อง
-    
-    # หากอ่านเฟรมไม่ได้ (กล้องหยุดทำงาน, หรือสตรีมจบ) ให้หยุดทำงาน
+    ret, frame = cap.read()
     if not ret:
-        print("Error: Can't receive frame (stream end or camera disconnected). Stopping.")
         break
 
-    # 1. การตรวจจับ (Detection)
-    results = model(frame, verbose=False, device='cpu')[0] # ระบุ device='cpu' เพื่อความเสถียรหากไม่ได้ใช้ GPU
+    results = model(frame, verbose=False)[0]
 
     detections = []
     
@@ -52,16 +38,19 @@ while True:
         cls = int(box.cls[0])
         conf = float(box.conf[0])
         x1, y1, x2, y2 = map(int, box.xyxy[0])
-        
-        # ตรวจจับเฉพาะคลาสที่กำหนดไว้และมี Confidence สูงกว่า 0.3
-        if cls in TARGET_CLASS_IDS and conf > 0.3:
+
+        # เฉพาะรถยนต์ รถบัส และรถบรรทุก
+        if cls in [2, 5, 7] and conf > 0.3:
             detections.append([x1, y1, x2, y2, conf])
-            
-    # 2. การติดตาม (Tracking)
-    dets = np.array(detections) if len(detections) > 0 else np.empty((0, 5))
+
+    dets = np.array(detections)
+    if len(dets) == 0:
+        dets = np.empty((0, 5))
+
+    # อัปเดต tracker
     tracks = tracker.update(dets)
 
-    # 3. วาดผลลัพธ์ (Drawing)
+    # วาดกรอบและ ID
     for x1, y1, x2, y2, track_id in tracks:
         x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
         track_id = int(track_id)
@@ -75,7 +64,7 @@ while True:
         cv2.putText(frame, label, (x1, y1 - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
-    cv2.imshow("Car Detection & Tracking (Notebook Camera)", frame)
+    cv2.imshow("Car Detection & Tracking", frame)
 
     # 4. การจัดการการหยุดทำงาน
     # cv2.waitKey(1) เป็นค่าที่ลื่นไหลที่สุด (ไม่หน่วง) 
@@ -87,7 +76,5 @@ while True:
         print("Quit key pressed. Stopping program.")
         break
 
-# Cleanup
-cv2.destroyAllWindows()
 cap.release()
-print("Program stopped and resources released.")
+cv2.destroyAllWindows()
