@@ -10,9 +10,11 @@ model = YOLO("yolov8n.pt")
 TARGET_CLASSES = {2: "Car", 5: "Bus", 7: "Truck"}
 TARGET_CLASS_IDS = list(TARGET_CLASSES.keys())
 
+
 # เปิดกล้องโน้ตบุ๊ก (Built-in Webcam)
 # **เพิ่ม cv2.CAP_DSHOW สำหรับ Windows เพื่อความเสถียร**
 cap = cv2.VideoCapture(0, cv2.CAP_DSHOW) 
+
 
 # ตรวจสอบว่าเปิดกล้องสำเร็จหรือไม่
 if not cap.isOpened():
